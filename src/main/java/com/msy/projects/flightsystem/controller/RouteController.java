@@ -12,7 +12,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/routes")
+@RequestMapping("/routes")
 public class RouteController {
 
     private final RouteService routeService;
@@ -21,17 +21,7 @@ public class RouteController {
     public RouteController(RouteService routeService) {
         this.routeService = routeService;
     }
-
-    @PostMapping("/search")
-    public ResponseEntity<List<List<TransportationDto>>> findRoutes(@RequestBody RouteRequestDto requestDto) {
-        return ResponseEntity.ok(
-                routeService.findRoutes(
-                        requestDto.getOriginLocationCode(),
-                        requestDto.getDestinationLocationCode(),
-                        requestDto.getTravelDate()
-                )
-        );
-    }
+    
 
     @GetMapping("/search")
     public ResponseEntity<List<List<TransportationDto>>> searchRoutes(
