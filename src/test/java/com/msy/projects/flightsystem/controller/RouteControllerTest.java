@@ -10,7 +10,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.test.context.support.WithMockUser;
@@ -30,19 +32,32 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @WebMvcTest(RouteController.class)
 @AutoConfigureMockMvc
+@Import(RouteControllerTest.TestConfig.class)
 public class RouteControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
-
-    @MockBean
+    
+    @Autowired
     private RouteService routeService;
-
-    @MockBean
-    private JwtUtil jwtUtil;
-
-    @MockBean
-    private UserDetailsService userDetailsService;
+    
+    @Configuration
+    static class TestConfig {
+        @Bean
+        public RouteService routeService() {
+            return org.mockito.Mockito.mock(RouteService.class);
+        }
+        
+        @Bean
+        public JwtUtil jwtUtil() {
+            return org.mockito.Mockito.mock(JwtUtil.class);
+        }
+        
+        @Bean
+        public UserDetailsService userDetailsService() {
+            return org.mockito.Mockito.mock(UserDetailsService.class);
+        }
+    }
 
     private List<TransportationDto> directFlightRoute;
     private List<List<TransportationDto>> allRoutes;

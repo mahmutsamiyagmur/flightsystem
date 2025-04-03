@@ -3,13 +3,17 @@ package com.msy.projects.flightsystem.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.msy.projects.flightsystem.dto.UserRequestDto;
 import com.msy.projects.flightsystem.dto.UserResponseDto;
-import com.msy.projects.flightsystem.entity.User;
 import com.msy.projects.flightsystem.security.JwtUtil;
 import com.msy.projects.flightsystem.service.UserService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.test.context.support.WithMockUser;
@@ -20,12 +24,14 @@ import java.util.List;
 
 import static org.hamcrest.Matchers.hasSize;
 import static org.mockito.ArgumentMatchers.any;
+import org.mockito.Mockito;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(UserController.class)
+@Import({UserControllerTest.TestConfig.class})
 public class UserControllerTest {
 
     @Autowired
@@ -33,15 +39,35 @@ public class UserControllerTest {
 
     @Autowired
     private ObjectMapper objectMapper;
-
-    @MockBean
+    
+    @Autowired
     private UserService userService;
+    
+    @BeforeEach
+    public void setUp() {
+        Mockito.reset(userService);
+    }
+    
 
-    @MockBean
-    private JwtUtil jwtUtil;
-
-    @MockBean
-    private UserDetailsService userDetailsService;
+    
+    @Configuration
+    @EnableMethodSecurity
+    static class TestConfig {
+        @Bean
+        public UserService userService() {
+            return org.mockito.Mockito.mock(UserService.class);
+        }
+        
+        @Bean
+        public JwtUtil jwtUtil() {
+            return org.mockito.Mockito.mock(JwtUtil.class);
+        }
+        
+        @Bean
+        public UserDetailsService userDetailsService() {
+            return org.mockito.Mockito.mock(UserDetailsService.class);
+        }
+    }
 
     @Test
     @WithMockUser(roles = "ADMIN")
@@ -51,7 +77,7 @@ public class UserControllerTest {
         UserResponseDto user2 = new UserResponseDto(2L, "agency", "AGENCY");
         List<UserResponseDto> users = Arrays.asList(user1, user2);
 
-        when(userService.getAllUsers()).thenReturn(users);
+        when(userService.getAllUsersDto()).thenReturn(users);
 
         // Act & Assert
         mockMvc.perform(get("/api/users")
@@ -61,7 +87,7 @@ public class UserControllerTest {
                 .andExpect(jsonPath("$[0].username").value("admin"))
                 .andExpect(jsonPath("$[1].username").value("agency"));
 
-        verify(userService).getAllUsers();
+        verify(userService).getAllUsersDto();
     }
 
     @Test
@@ -80,7 +106,7 @@ public class UserControllerTest {
     void getUserById_ShouldReturnUser() throws Exception {
         // Arrange
         UserResponseDto user = new UserResponseDto(1L, "admin", "ADMIN");
-        when(userService.getUserById(1L)).thenReturn(user);
+        when(userService.getUserDtoById(1L)).thenReturn(user);
 
         // Act & Assert
         mockMvc.perform(get("/api/users/1")
@@ -89,7 +115,7 @@ public class UserControllerTest {
                 .andExpect(jsonPath("$.username").value("admin"))
                 .andExpect(jsonPath("$.role").value("ADMIN"));
 
-        verify(userService).getUserById(1L);
+        verify(userService).getUserDtoById(1L);
     }
 
     @Test
@@ -153,11 +179,12 @@ public class UserControllerTest {
     }
 
     @Test
-    void getUsers_WithoutAuthentication_ShouldReturnUnauthorized() throws Exception {
-        // Act & Assert - Without authentication
+    @WithMockUser(roles = "USER")
+    void getUsers_WithInvalidRole_ShouldReturnForbidden() throws Exception {
+        // Act & Assert - With invalid role
         mockMvc.perform(get("/api/users")
                 .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isForbidden());
 
         verifyNoInteractions(userService);
     }
