@@ -1,6 +1,7 @@
 package com.msy.projects.flightsystem.service;
 
 import com.msy.projects.flightsystem.dto.TransportationDto;
+import com.msy.projects.flightsystem.exception.ResourceNotFoundException;
 import com.msy.projects.flightsystem.model.Location;
 import com.msy.projects.flightsystem.model.Transportation;
 import com.msy.projects.flightsystem.repository.LocationRepository;
@@ -19,12 +20,15 @@ public class TransportationService {
 
     private final TransportationRepository transportationRepository;
     private final LocationRepository locationRepository;
+    private final CacheService cacheService;
 
     @Autowired
     public TransportationService(TransportationRepository transportationRepository,
-                               LocationRepository locationRepository) {
+                               LocationRepository locationRepository,
+                               CacheService cacheService) {
         this.transportationRepository = transportationRepository;
         this.locationRepository = locationRepository;
+        this.cacheService = cacheService;
     }
 
     public List<TransportationDto> getAllTransportations() {
@@ -35,16 +39,16 @@ public class TransportationService {
 
     public TransportationDto getTransportationById(Long id) {
         Transportation transportation = transportationRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Transportation not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Transportation not found with id: " + id));
         return mapToDto(transportation);
     }
 
     public List<TransportationDto> getTransportationsByOriginAndDestination(String originCode, String destCode) {
         Location origin = locationRepository.findByLocationCode(originCode)
-                .orElseThrow(() -> new RuntimeException("Origin location not found with code: " + originCode));
+                .orElseThrow(() -> new ResourceNotFoundException("Origin location not found with code: " + originCode));
         
         Location destination = locationRepository.findByLocationCode(destCode)
-                .orElseThrow(() -> new RuntimeException("Destination location not found with code: " + destCode));
+                .orElseThrow(() -> new ResourceNotFoundException("Destination location not found with code: " + destCode));
         
         return transportationRepository.findByOriginLocationAndDestinationLocation(origin, destination).stream()
                 .map(this::mapToDto)
@@ -53,7 +57,7 @@ public class TransportationService {
 
     public List<TransportationDto> getTransportationsByOriginAndDate(String originCode, LocalDate date) {
         Location origin = locationRepository.findByLocationCode(originCode)
-                .orElseThrow(() -> new RuntimeException("Origin location not found with code: " + originCode));
+                .orElseThrow(() -> new ResourceNotFoundException("Origin location not found with code: " + originCode));
         
         // Get the day of week (1=Monday, 2=Tuesday, etc.)
         DayOfWeek dayOfWeek = date.getDayOfWeek();
@@ -67,10 +71,10 @@ public class TransportationService {
     @Transactional
     public TransportationDto createTransportation(TransportationDto transportationDto) {
         Location origin = locationRepository.findById(transportationDto.getOriginLocationId())
-                .orElseThrow(() -> new RuntimeException("Origin location not found with id: " + transportationDto.getOriginLocationId()));
+                .orElseThrow(() -> new ResourceNotFoundException("Origin location not found with id: " + transportationDto.getOriginLocationId()));
         
         Location destination = locationRepository.findById(transportationDto.getDestinationLocationId())
-                .orElseThrow(() -> new RuntimeException("Destination location not found with id: " + transportationDto.getDestinationLocationId()));
+                .orElseThrow(() -> new ResourceNotFoundException("Destination location not found with id: " + transportationDto.getDestinationLocationId()));
         
         Transportation transportation = new Transportation();
         transportation.setOriginLocation(origin);
@@ -79,19 +83,23 @@ public class TransportationService {
         transportation.setOperatingDays(transportationDto.getOperatingDays());
         
         Transportation savedTransportation = transportationRepository.save(transportation);
+        
+        // Clear route cache as transportation data has changed
+        cacheService.clearRouteCache();
+        
         return mapToDto(savedTransportation);
     }
 
     @Transactional
     public TransportationDto updateTransportation(Long id, TransportationDto transportationDto) {
         Transportation existingTransportation = transportationRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Transportation not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Transportation not found with id: " + id));
         
         Location origin = locationRepository.findById(transportationDto.getOriginLocationId())
-                .orElseThrow(() -> new RuntimeException("Origin location not found with id: " + transportationDto.getOriginLocationId()));
+                .orElseThrow(() -> new ResourceNotFoundException("Origin location not found with id: " + transportationDto.getOriginLocationId()));
         
         Location destination = locationRepository.findById(transportationDto.getDestinationLocationId())
-                .orElseThrow(() -> new RuntimeException("Destination location not found with id: " + transportationDto.getDestinationLocationId()));
+                .orElseThrow(() -> new ResourceNotFoundException("Destination location not found with id: " + transportationDto.getDestinationLocationId()));
         
         existingTransportation.setOriginLocation(origin);
         existingTransportation.setDestinationLocation(destination);
@@ -99,14 +107,21 @@ public class TransportationService {
         existingTransportation.setOperatingDays(transportationDto.getOperatingDays());
         
         Transportation updatedTransportation = transportationRepository.save(existingTransportation);
+        
+        // Clear route cache as transportation data has changed
+        cacheService.clearRouteCache();
+        
         return mapToDto(updatedTransportation);
     }
 
     @Transactional
     public void deleteTransportation(Long id) {
         Transportation transportation = transportationRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Transportation not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Transportation not found with id: " + id));
         transportationRepository.delete(transportation);
+        
+        // Clear route cache as transportation data has changed
+        cacheService.clearRouteCache();
     }
 
     public TransportationDto mapToDto(Transportation transportation) {

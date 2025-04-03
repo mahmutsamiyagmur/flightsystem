@@ -1,0 +1,492 @@
+{
+	"info": {
+		"_postman_id": "e5e4f3e2-d1c0-4b9a-8b87-c6e5d4f3e2d1",
+		"name": "Flight System API",
+		"description": "Collection for testing the Flight System API with JWT authentication",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Authentication",
+			"description": "Endpoints for authentication and token management",
+			"item": [
+				{
+					"name": "Login as Admin",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = JSON.parse(responseBody);",
+									"pm.environment.set(\"admin_token\", jsonData.token);",
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Token is present\", function () {",
+									"    pm.expect(jsonData.token).to.be.a('string').and.not.empty;",
+									"});",
+									"pm.test(\"Username is admin\", function () {",
+									"    pm.expect(jsonData.username).to.eql(\"admin\");",
+									"});",
+									"pm.test(\"Role is ADMIN\", function () {",
+									"    pm.expect(jsonData.role).to.eql(\"ADMIN\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"username\": \"admin\",\n    \"password\": \"admin123\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8080/auth/login",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"auth",
+								"login"
+							]
+						},
+						"description": "Login with admin credentials to get JWT token"
+					},
+					"response": []
+				},
+				{
+					"name": "Login as Agency",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = JSON.parse(responseBody);",
+									"pm.environment.set(\"agency_token\", jsonData.token);",
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Token is present\", function () {",
+									"    pm.expect(jsonData.token).to.be.a('string').and.not.empty;",
+									"});",
+									"pm.test(\"Username is agency\", function () {",
+									"    pm.expect(jsonData.username).to.eql(\"agency\");",
+									"});",
+									"pm.test(\"Role is AGENCY\", function () {",
+									"    pm.expect(jsonData.role).to.eql(\"AGENCY\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"username\": \"agency\",\n    \"password\": \"agency123\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8080/auth/login",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"auth",
+								"login"
+							]
+						},
+						"description": "Login with agency credentials to get JWT token"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Routes",
+			"description": "Endpoints for managing routes",
+			"item": [
+				{
+					"name": "Search Routes (Admin)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"originLocationCode\": \"IST\",\n    \"destinationLocationCode\": \"KSY\",\n    \"travelDate\": \"2025-05-15\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8080/routes/search",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"routes",
+								"search"
+							]
+						},
+						"description": "Search for routes as admin user"
+					},
+					"response": []
+				},
+				{
+					"name": "Search Routes (Agency)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{agency_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"originLocationCode\": \"IST\",\n    \"destinationLocationCode\": \"KSY\",\n    \"travelDate\": \"2025-05-15\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8080/routes/search",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"routes",
+								"search"
+							]
+						},
+						"description": "Search for routes as agency user"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Routes (GET method)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{agency_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8080/routes/search?originCode=IST&destinationCode=KSY&travelDate=2025-05-15",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"routes",
+								"search"
+							],
+							"query": [
+								{
+									"key": "originCode",
+									"value": "IST"
+								},
+								{
+									"key": "destinationCode",
+									"value": "KSY"
+								},
+								{
+									"key": "travelDate",
+									"value": "2025-05-15"
+								}
+							]
+						},
+						"description": "Search for routes using GET method"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Locations",
+			"description": "Endpoints for managing locations",
+			"item": [
+				{
+					"name": "Get All Locations (Admin)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8080/locations",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"locations"
+							]
+						},
+						"description": "Get all locations as admin user"
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Locations (Agency)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{agency_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8080/locations",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"locations"
+							]
+						},
+						"description": "Get all locations as agency user (READ access allowed)"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Location (Admin Only)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"locationCode\": \"ANK\",\n    \"name\": \"Ankara Airport\",\n    \"city\": \"Ankara\",\n    \"country\": \"Turkey\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8080/locations",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"locations"
+							]
+						},
+						"description": "Create a new location (admin only)"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Location (Agency - Should Fail)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{agency_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"locationCode\": \"ANK\",\n    \"name\": \"Ankara Airport\",\n    \"city\": \"Ankara\",\n    \"country\": \"Turkey\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8080/locations",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"locations"
+							]
+						},
+						"description": "Attempt to create a location as agency (should return 403 Forbidden)"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Transportations",
+			"description": "Endpoints for managing transportations",
+			"item": [
+				{
+					"name": "Get All Transportations (Admin Only)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8080/transportations",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"transportations"
+							]
+						},
+						"description": "Get all transportations (admin only)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Transportations (Agency - Should Fail)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{agency_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8080/transportations",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"transportations"
+							]
+						},
+						"description": "Attempt to get transportations as agency (should return 403 Forbidden)"
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8080",
+			"type": "string"
+		}
+	]
+}

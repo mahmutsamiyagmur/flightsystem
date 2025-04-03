@@ -1,11 +1,14 @@
 package com.msy.projects.flightsystem.service;
 
 import com.msy.projects.flightsystem.dto.TransportationDto;
+import com.msy.projects.flightsystem.exception.ResourceNotFoundException;
 import com.msy.projects.flightsystem.model.Location;
 import com.msy.projects.flightsystem.model.Transportation;
+import com.msy.projects.flightsystem.model.TransportationType;
 import com.msy.projects.flightsystem.repository.LocationRepository;
 import com.msy.projects.flightsystem.repository.TransportationRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -31,67 +34,150 @@ public class RouteService {
     /**
      * Find all valid routes from origin to destination on the specified date
      * 
+     * A valid route must:
+     * 1. Have exactly one FLIGHT transportation
+     * 2. Can optionally have a before-flight transfer (non-FLIGHT)
+     * 3. Can optionally have an after-flight transfer (non-FLIGHT)
+     * 4. Maximum of 3 transportation segments total
+     * 5. All transportations must be connected (destination of one = origin of next)
+     * 6. All transportations must be available on the specified date
+     * 
+     * This method is cached using Redis with a key based on origin, destination, and travel date.
+     * 
      * @param originCode Code of the origin location
      * @param destinationCode Code of the destination location
      * @param travelDate Date of travel
      * @return List of possible routes (as lists of transportation segments)
      */
+    @Cacheable(value = "routeCache", key = "#originCode + '-' + #destinationCode + '-' + #travelDate")
     public List<List<TransportationDto>> findRoutes(String originCode, String destinationCode, LocalDate travelDate) {
         // Validate locations exist
         Location origin = locationRepository.findByLocationCode(originCode)
-                .orElseThrow(() -> new RuntimeException("Origin location not found with code: " + originCode));
+                .orElseThrow(() -> new ResourceNotFoundException("Origin location not found with code: " + originCode));
         
         Location destination = locationRepository.findByLocationCode(destinationCode)
-                .orElseThrow(() -> new RuntimeException("Destination location not found with code: " + destinationCode));
+                .orElseThrow(() -> new ResourceNotFoundException("Destination location not found with code: " + destinationCode));
         
         // Get the day of week (1-7, where 1 is Monday)
         int dayOfWeek = travelDate.getDayOfWeek().getValue();
         
         // List to store all valid routes
-        List<List<TransportationDto>> routes = new ArrayList<>();
+        List<List<TransportationDto>> validRoutes = new ArrayList<>();
         
-        // Use a breadth-first search approach to find all possible routes
-        findAllRoutes(origin, destination, dayOfWeek, new ArrayList<>(), new HashSet<>(), routes);
+        // Get all available flight options on the specified day
+        List<Transportation> availableFlights = transportationRepository.findByOperatingDay(dayOfWeek)
+                .stream()
+                .filter(t -> t.getTransportationType() == TransportationType.FLIGHT)
+                .collect(Collectors.toList());
         
-        return routes;
+        for (Transportation flight : availableFlights) {
+            findValidRoutesWithFlight(origin, destination, dayOfWeek, flight, validRoutes);
+        }
+        
+        return validRoutes;
     }
 
-    private void findAllRoutes(Location current, Location destination, int dayOfWeek, 
-                            List<Transportation> currentRoute, Set<Long> visitedLocations,
-                            List<List<TransportationDto>> validRoutes) {
+    /**
+     * Find valid routes using a specific flight as the main transportation
+     */
+    private void findValidRoutesWithFlight(Location origin, Location destination, int dayOfWeek, 
+                                        Transportation flight, List<List<TransportationDto>> validRoutes) {
         
-        // Avoid cycles by tracking visited locations
-        if (visitedLocations.contains(current.getId())) {
-            return;
+        Location flightOrigin = flight.getOriginLocation();
+        Location flightDestination = flight.getDestinationLocation();
+        
+        // Case 1: Flight only (if the flight directly connects origin and destination)
+        if (flightOrigin.getId().equals(origin.getId()) && flightDestination.getId().equals(destination.getId())) {
+            List<Transportation> route = new ArrayList<>();
+            route.add(flight);
+            validRoutes.add(route.stream().map(transportationService::mapToDto).collect(Collectors.toList()));
         }
         
-        // If we've reached a reasonable limit of transfers (4 is a reasonable number)
-        if (currentRoute.size() >= 4) {
-            return;
+        // Case 2: Before-flight transfer + Flight
+        if (flightDestination.getId().equals(destination.getId())) {
+            findBeforeFlightTransfers(origin, flight, dayOfWeek, validRoutes);
         }
         
-        // Mark current location as visited to avoid cycles
-        visitedLocations.add(current.getId());
+        // Case 3: Flight + After-flight transfer
+        if (flightOrigin.getId().equals(origin.getId())) {
+            findAfterFlightTransfers(flight, destination, dayOfWeek, validRoutes);
+        }
         
-        // Get all transportation options from the current location that operate on the given day
-        List<Transportation> options = transportationRepository.findByOriginLocationAndOperatingDay(current, dayOfWeek);
+        // Case 4: Before-flight transfer + Flight + After-flight transfer
+        findCompleteRoutes(origin, flight, destination, dayOfWeek, validRoutes);
+    }
+    
+    /**
+     * Find valid before-flight transfers
+     */
+    private void findBeforeFlightTransfers(Location origin, Transportation flight, int dayOfWeek,
+                                           List<List<TransportationDto>> validRoutes) {
+        // Find all non-flight transportations from origin to flight origin that operate on the given day
+        List<Transportation> beforeFlightOptions = transportationRepository.findByOperatingDay(dayOfWeek)
+                .stream()
+                .filter(t -> t.getTransportationType() != TransportationType.FLIGHT)
+                .filter(t -> t.getOriginLocation().getId().equals(origin.getId()))
+                .filter(t -> t.getDestinationLocation().getId().equals(flight.getOriginLocation().getId()))
+                .collect(Collectors.toList());
         
-        for (Transportation transport : options) {
-            // Add this transportation to our current route
-            List<Transportation> newRoute = new ArrayList<>(currentRoute);
-            newRoute.add(transport);
-            
-            Location nextStop = transport.getDestinationLocation();
-            
-            // If we've reached the destination, add this route to our valid routes
-            if (nextStop.getId().equals(destination.getId())) {
-                validRoutes.add(newRoute.stream()
-                                .map(transportationService::mapToDto)
-                                .collect(Collectors.toList()));
-            } else {
-                // Continue searching for routes from the next location
-                Set<Long> newVisited = new HashSet<>(visitedLocations);
-                findAllRoutes(nextStop, destination, dayOfWeek, newRoute, newVisited, validRoutes);
+        for (Transportation beforeFlight : beforeFlightOptions) {
+            List<Transportation> route = new ArrayList<>();
+            route.add(beforeFlight);
+            route.add(flight);
+            validRoutes.add(route.stream().map(transportationService::mapToDto).collect(Collectors.toList()));
+        }
+    }
+    
+    /**
+     * Find valid after-flight transfers
+     */
+    private void findAfterFlightTransfers(Transportation flight, Location destination, int dayOfWeek,
+                                          List<List<TransportationDto>> validRoutes) {
+        // Find all non-flight transportations from flight destination to final destination that operate on the given day
+        List<Transportation> afterFlightOptions = transportationRepository.findByOperatingDay(dayOfWeek)
+                .stream()
+                .filter(t -> t.getTransportationType() != TransportationType.FLIGHT)
+                .filter(t -> t.getOriginLocation().getId().equals(flight.getDestinationLocation().getId()))
+                .filter(t -> t.getDestinationLocation().getId().equals(destination.getId()))
+                .collect(Collectors.toList());
+        
+        for (Transportation afterFlight : afterFlightOptions) {
+            List<Transportation> route = new ArrayList<>();
+            route.add(flight);
+            route.add(afterFlight);
+            validRoutes.add(route.stream().map(transportationService::mapToDto).collect(Collectors.toList()));
+        }
+    }
+    
+    /**
+     * Find complete routes (before-flight + flight + after-flight)
+     */
+    private void findCompleteRoutes(Location origin, Transportation flight, Location destination, int dayOfWeek,
+                                    List<List<TransportationDto>> validRoutes) {
+        // Find all valid before-flight transfers
+        List<Transportation> beforeFlightOptions = transportationRepository.findByOperatingDay(dayOfWeek)
+                .stream()
+                .filter(t -> t.getTransportationType() != TransportationType.FLIGHT)
+                .filter(t -> t.getOriginLocation().getId().equals(origin.getId()))
+                .filter(t -> t.getDestinationLocation().getId().equals(flight.getOriginLocation().getId()))
+                .collect(Collectors.toList());
+        
+        // Find all valid after-flight transfers
+        List<Transportation> afterFlightOptions = transportationRepository.findByOperatingDay(dayOfWeek)
+                .stream()
+                .filter(t -> t.getTransportationType() != TransportationType.FLIGHT)
+                .filter(t -> t.getOriginLocation().getId().equals(flight.getDestinationLocation().getId()))
+                .filter(t -> t.getDestinationLocation().getId().equals(destination.getId()))
+                .collect(Collectors.toList());
+        
+        // Create all possible combinations
+        for (Transportation beforeFlight : beforeFlightOptions) {
+            for (Transportation afterFlight : afterFlightOptions) {
+                List<Transportation> route = new ArrayList<>();
+                route.add(beforeFlight);
+                route.add(flight);
+                route.add(afterFlight);
+                validRoutes.add(route.stream().map(transportationService::mapToDto).collect(Collectors.toList()));
             }
         }
     }
