@@ -1,5 +1,3 @@
-version: '3.8'
-
 # Use environment variables from .env file
 services:
   app:
